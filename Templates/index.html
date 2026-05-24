@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-time ASL Sign Detector</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap"
+      rel="stylesheet"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #0a0a0f;
+        --panel: #111118;
+        --border: #1e1e2e;
+        --accent: #00ffe0;
+        --accent2: #ff4ecd;
+        --accent3: #ffe04e;
+        --text: #e8e8f0;
+        --muted: #555570;
+        --bar-bg: #1a1a2e;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Syne", sans-serif;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        flex-shrink: 0;
+      }
+
+      .logo {
+        font-family: "Space Mono", monospace;
+        font-size: 13px;
+        color: var(--accent);
+        letter-spacing: 3px;
+        text-transform: uppercase;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 10px var(--accent);
+        animation: pulse 2s infinite;
+        display: inline-block;
+        margin-right: 8px;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      .status-text {
+        font-family: "Space Mono", monospace;
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 1px;
+      }
+
+      .main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .camera-section {
+        flex: 1;
+        display: flex;
+        align-items: stretch;
+        background: #000;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .camera-section img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .cam-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+      }
+
+      .corner {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border-color: var(--accent);
+        border-style: solid;
+        opacity: 0.7;
+      }
+      .corner.tl {
+        top: 16px;
+        left: 16px;
+        border-width: 2px 0 0 2px;
+      }
+      .corner.tr {
+        top: 16px;
+        right: 16px;
+        border-width: 2px 2px 0 0;
+      }
+      .corner.bl {
+        bottom: 16px;
+        left: 16px;
+        border-width: 0 0 2px 2px;
+      }
+      .corner.br {
+        bottom: 16px;
+        right: 16px;
+        border-width: 0 2px 2px 0;
+      }
+
+      .stability-ring {
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.6);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 1px;
+      }
+
+      .ring-bar {
+        width: 80px;
+        height: 4px;
+        background: var(--bar-bg);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .ring-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent2), var(--accent));
+        border-radius: 2px;
+        transition: width 0.1s linear;
+        width: 0%;
+      }
+
+      .side-panel {
+        width: 300px;
+        flex-shrink: 0;
+        background: var(--panel);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 16px 14px;
+        gap: 14px;
+      }
+
+      .panel-section {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px;
+      }
+
+      .section-title {
+        font-family: "Space Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
+
+      .sign-letter {
+        font-size: 64px;
+        font-weight: 800;
+        color: var(--accent);
+        line-height: 1;
+        text-shadow: 0 0 40px rgba(0, 255, 224, 0.4);
+        transition: color 0.15s;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+
+      .sign-letter.flash {
+        color: var(--accent2);
+        text-shadow: 0 0 40px rgba(255, 78, 205, 0.6);
+      }
+      .sign-letter.no-hand {
+        color: var(--muted);
+        font-size: 32px;
+      }
+
+      .confidence-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .confidence-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .conf-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .conf-label {
+        font-family: "Space Mono", monospace;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .conf-label.rank-1 {
+        color: var(--accent);
+      }
+      .conf-label.rank-2 {
+        color: var(--accent2);
+      }
+      .conf-label.rank-3 {
+        color: var(--accent3);
+      }
+      .conf-pct {
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .bar-track {
+        height: 5px;
+        background: var(--bar-bg);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.25s ease;
+      }
+      .bar-fill.rank-1 {
+        background: var(--accent);
+        box-shadow: 0 0 6px rgba(0, 255, 224, 0.5);
+      }
+      .bar-fill.rank-2 {
+        background: var(--accent2);
+      }
+      .bar-fill.rank-3 {
+        background: var(--accent3);
+      }
+
+      .threshold-note {
+        font-family: "Space Mono", monospace;
+        font-size: 9px;
+        color: var(--muted);
+        margin-top: 8px;
+        letter-spacing: 0.5px;
+      }
+
+      /* Word builder */
+      .word-tokens {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-height: 36px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .word-token {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 5px;
+        padding: 2px 7px;
+        font-family: "Inter", sans-serif;
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 0.3px;
+        color: var(--accent);
+        animation: popIn 0.2s ease;
+      }
+
+      /* Special tokens for space and delete */
+      .word-token.space-token {
+        color: var(--accent3);
+        border-color: var(--accent3);
+        font-size: 10px;
+        opacity: 0.7;
+      }
+
+      @keyframes popIn {
+        from {
+          transform: scale(0.6);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .word-empty {
+        font-family: "Inter", sans-serif;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 1px;
+      }
+
+      .full-word {
+        font-family: "Inter", sans-serif;
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--text);
+        text-align: center;
+        letter-spacing: 2px;
+        min-height: 28px;
+        word-break: break-all;
+        padding: 6px 0;
+        border-top: 1px solid var(--border);
+        margin-top: 4px;
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .btn {
+        flex: 1;
+        padding: 9px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .btn:hover {
+        border-color: var(--accent2);
+        color: var(--accent2);
+        background: rgba(255, 78, 205, 0.05);
+      }
+      .btn.danger:hover {
+        border-color: #ff4444;
+        color: #ff4444;
+        background: rgba(255, 68, 68, 0.05);
+      }
+
+      .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 4px;
+      }
+
+      .slider-row input[type="range"] {
+        flex: 1;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+
+      .slider-val {
+        font-family: "Space Mono", monospace;
+        font-size: 11px;
+        color: var(--accent);
+        min-width: 36px;
+        text-align: right;
+      }
+
+      .side-panel::-webkit-scrollbar {
+        width: 4px;
+      }
+      .side-panel::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .side-panel::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="logo">ASL · Detector</span>
+      <span class="status-text"
+        ><span class="status-dot"></span>LIVE FEED ACTIVE</span
+      >
+    </header>
+
+    <div class="main">
+      <div class="camera-section">
+        <img id="bg" src="{{ url_for('video_feed') }}" alt="Camera Feed" />
+        <div class="cam-overlay">
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+          <div class="stability-ring">
+            HOLD
+            <div class="ring-bar">
+              <div class="ring-fill" id="ringFill"></div>
+            </div>
+            <span id="ringPct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-panel">
+        <div class="panel-section">
+          <div class="section-title">Detected Sign</div>
+          <div class="sign-letter no-hand" id="signLetter">No Hand</div>
+        </div>
+
+        <!-- 2. Top 3 Predictions -->
+        <div class="panel-section">
+          <div class="section-title">Top Predictions</div>
+          <div class="confidence-list" id="confidenceList">
+            <div class="word-empty">Show your hand...</div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-title">Word Builder</div>
+          <div class="word-tokens" id="wordTokens">
+            <span class="word-empty">Signs appear here...</span>
+          </div>
+          <div class="full-word" id="fullWord"></div>
+        </div>
+
+        <!-- 4. Controls -->
+        <div class="panel-section">
+          <div class="section-title">Controls</div>
+          <div class="btn-row">
+            <button class="btn" onclick="deleteLastSign()">← Undo</button>
+            <button class="btn danger" onclick="clearWord()">Clear All</button>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-title">Settings</div>
+          <div class="threshold-note">Min confidence to accept sign:</div>
+          <div class="slider-row">
+            <input
+              type="range"
+              min="30"
+              max="95"
+              value="60"
+              id="confThreshold"
+              oninput="updateThreshold(this.value)"
+            />
+            <span class="slider-val" id="thresholdVal">60%</span>
+          </div>
+          <div class="threshold-note" style="margin-top: 12px">
+            Stability time (hold duration):
+          </div>
+          <div class="slider-row">
+            <input
+              type="range"
+              min="5"
+              max="60"
+              value="25"
+              id="stableSlider"
+              oninput="updateStable(this.value)"
+            />
+            <span class="slider-val" id="stableVal">25</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let wordBuffer = [];
+      let lastDetected = "";
+      let stableCount = 0;
+      let STABLE_THRESHOLD = 25;
+      let MIN_CONFIDENCE = 60;
+      let prevDetected = "";
+      let addedThisStable = false;
+
+      function updateThreshold(val) {
+        MIN_CONFIDENCE = parseInt(val);
+        document.getElementById("thresholdVal").textContent = val + "%";
+      }
+
+      function updateStable(val) {
+        STABLE_THRESHOLD = parseInt(val);
+        document.getElementById("stableVal").textContent = val;
+        stableCount = 0;
+        document.getElementById("ringFill").style.width = "0%";
+        document.getElementById("ringPct").textContent = "0%";
+      }
+
+      async function fetchPrediction() {
+        try {
+          const res = await fetch("/prediction");
+          const data = await res.json();
+          const signEl = document.getElementById("signLetter");
+
+          // No hand
+          if (!data.hand_present || !data.detected) {
+            signEl.textContent = "No Hand";
+            signEl.className = "sign-letter no-hand";
+            document.getElementById("confidenceList").innerHTML =
+              '<div class="word-empty">Show your hand...</div>';
+            stableCount = 0;
+            lastDetected = "";
+            addedThisStable = false;
+            document.getElementById("ringFill").style.width = "0%";
+            document.getElementById("ringPct").textContent = "0%";
+            return;
+          }
+
+          if (data.confidence < MIN_CONFIDENCE) {
+            signEl.textContent = "?";
+            signEl.className = "sign-letter no-hand";
+            stableCount = 0;
+            lastDetected = "";
+            addedThisStable = false;
+            document.getElementById("ringFill").style.width = "0%";
+            document.getElementById("ringPct").textContent = "0%";
+            updateConfidenceBars(data.top3);
+            return;
+          }
+
+          if (data.detected !== prevDetected) {
+            signEl.classList.add("flash");
+            setTimeout(() => signEl.classList.remove("flash"), 200);
+            prevDetected = data.detected;
+          }
+          signEl.textContent = data.detected;
+          signEl.className = "sign-letter";
+
+          updateConfidenceBars(data.top3);
+
+          if (data.detected === lastDetected) {
+            if (!addedThisStable) stableCount++;
+          } else {
+            stableCount = 0;
+            lastDetected = data.detected;
+            addedThisStable = false;
+          }
+
+          const pct = Math.min((stableCount / STABLE_THRESHOLD) * 100, 100);
+          document.getElementById("ringFill").style.width = pct + "%";
+          document.getElementById("ringPct").textContent =
+            Math.round(pct) + "%";
+
+          if (stableCount >= STABLE_THRESHOLD && !addedThisStable) {
+            addedThisStable = true;
+            stableCount = 0;
+            document.getElementById("ringFill").style.width = "0%";
+            document.getElementById("ringPct").textContent = "0%";
+
+            const raw = data.detected.toUpperCase();
+
+            if (raw === "DEL" || raw === "DELETE") {
+              wordBuffer.pop();
+            } else if (raw === "SPACE") {
+              wordBuffer.push({
+                display: "·SPACE·",
+                actual: " ",
+                isSpace: true,
+              });
+            } else {
+              wordBuffer.push({ display: raw, actual: raw, isSpace: false });
+            }
+
+            updateWordDisplay();
+          }
+        } catch (e) {}
+      }
+
+      function updateConfidenceBars(top3) {
+        const listEl = document.getElementById("confidenceList");
+        if (top3 && top3.length > 0) {
+          listEl.innerHTML = top3
+            .map(
+              (item, i) => `
+                <div class="confidence-item">
+                    <div class="conf-header">
+                        <span class="conf-label rank-${i + 1}">${item.label}</span>
+                        <span class="conf-pct">${item.confidence.toFixed(1)}%</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill rank-${i + 1}" style="width:${Math.min(item.confidence, 100)}%"></div>
+                    </div>
+                </div>
+            `,
+            )
+            .join("");
+        }
+      }
+
+      function updateWordDisplay() {
+        const tokensEl = document.getElementById("wordTokens");
+        const fullEl = document.getElementById("fullWord");
+
+        if (wordBuffer.length === 0) {
+          tokensEl.innerHTML =
+            '<span class="word-empty">Signs appear here...</span>';
+          fullEl.textContent = "";
+        } else {
+          tokensEl.innerHTML = wordBuffer
+            .map(
+              (w) =>
+                `<span class="word-token ${w.isSpace ? "space-token" : ""}">${w.display}</span>`,
+            )
+            .join("");
+          fullEl.textContent = wordBuffer.map((w) => w.actual).join("");
+        }
+      }
+
+      function deleteLastSign() {
+        if (wordBuffer.length > 0) {
+          wordBuffer.pop();
+          updateWordDisplay();
+        }
+      }
+
+      function clearWord() {
+        wordBuffer = [];
+        stableCount = 0;
+        lastDetected = "";
+        addedThisStable = false;
+        document.getElementById("ringFill").style.width = "0%";
+        document.getElementById("ringPct").textContent = "0%";
+        updateWordDisplay();
+      }
+
+      setInterval(fetchPrediction, 150);
+    </script>
+  </body>
+</html>
